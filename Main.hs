@@ -4,7 +4,7 @@ main :: IO ()
 main = do
  let game = Game {gBoard = initializeBoard, gTurn = White, gLog = []}
  putStrLn $ show 
-                 $ move (A,5) (B,6)
+                 $ move (F,2) (G,3)
                  $ move (E,7) (E,6)
                  $ move (A,4) (A,5)
                  $ move (B,8) (C,6)
