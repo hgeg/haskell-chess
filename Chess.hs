@@ -2,11 +2,11 @@ module Chess where
 
 import qualified Data.Map as M
 import Data.List
+import Logging
 
 data Type = Pawn | Knight | Bishop | Rook | Queen | King deriving (Show, Eq)
 data Color = Black | White deriving (Show, Eq)
 data Piece = P Color Type deriving Eq
-data Log = Either Bool String
 
 instance Show Piece where
   show (P White Pawn  ) = "♙"
@@ -119,11 +119,11 @@ move' from to g = case (takePiece b from) of
   Nothing -> Game { gBoard = b, gTurn = t, gLog = (("invalid location "++show from):l)}
   Just piece  ->
     let (P color _) = piece in
-      if t==color && validateMove b piece from to  && isKingSafe b color from to
-        then Game { gBoard = makeMove b piece from to, 
+      case mconcat [ doesTurnMatch t color, validateMove b piece from to, isKingSafe b color from to] of
+        Ok -> Game { gBoard = makeMove b piece from to, 
                     gTurn = if color == Black then White else Black, 
                     gLog = genLog piece}
-        else Game { gBoard = b, gTurn = t, gLog = ("invalid move":l)}
+        Fail msg -> Game { gBoard = b, gTurn = t, gLog = (msg:l)}
   where 
     genLog p = ((show p ++ " " ++ ((['a'..'h']!!(c0-1)) : show r0) ++ ""++ show p ++ " " ++ ((['a'..'h']!!(c1-1)) : show r1) ++ ""):l)
     b = gBoard g
@@ -135,42 +135,55 @@ move' from to g = case (takePiece b from) of
 makeMove :: Board -> Piece -> Pos_q -> Pos_q -> Board
 makeMove b piece from to = M.insert to piece (M.delete from b)
 
-validateMove :: Board -> Piece -> Pos_q -> Pos_q -> Bool
-validateMove b (P _ Pawn)   from to = from/=to && isInsideBoard to && isPawnMove b from to
-validateMove b (P _ Knight) from to = from/=to && isInsideBoard to && isLShaped from to && isFree b from to 
-validateMove b (P _ Bishop) from to = from/=to && isInsideBoard to && isDiagonal from to 8 && isFree b from to
-validateMove b (P _ Rook)   from to = from/=to && isInsideBoard to && isStraight from to 8 && isFree b from to
-validateMove b (P _ Queen)  from to = from/=to && isInsideBoard to && (isStraight from to 8 || isDiagonal from to 8) && isFree b from to
-validateMove b (P _ King)   from to = from/=to && isInsideBoard to && (isStraight from to 1 || isDiagonal from to 1) && isFree b from to
+doesTurnMatch :: Color -> Color -> Log
+doesTurnMatch t c = mkLog (t==c) $ "not " ++ (show c) ++ "'s turn"
 
+validateMove :: Board -> Piece -> Pos_q -> Pos_q -> Log
+validateMove b (P _ Pawn)   from to = mconcat [diffCheck from to, isInsideBoard to, isPawnMove b from to]
+validateMove b (P _ Knight) from to = mconcat [diffCheck from to, isInsideBoard to, isLShaped from to, isFree b from to]
+validateMove b (P _ Bishop) from to = mconcat [diffCheck from to, isInsideBoard to, isDiagonal from to 8, isFree b from to]
+validateMove b (P _ Rook)   from to = mconcat [diffCheck from to, isInsideBoard to, isStraight from to 8, isFree b from to]
+validateMove b (P _ Queen)  from to = mconcat [diffCheck from to, isInsideBoard to, (isStraight from to 8 <|> isDiagonal from to 8), isFree b from to]
+validateMove b (P _ King)   from to = mconcat [diffCheck from to, isInsideBoard to, (isStraight from to 1 <|> isDiagonal from to 1), isFree b from to]
 
-isInsideBoard :: Pos_q -> Bool
-isInsideBoard (c,r)= r>=1 && r<= 8 && c>=1 && c<=8
+diffCheck :: Pos_q -> Pos_q -> Log
+diffCheck from to = mkLog (from/=to) "non-move"
 
-isPawnMove :: Board -> Pos_q -> Pos_q -> Bool
+isInsideBoard :: Pos_q -> Log
+isInsideBoard (c,r)= mkLog (r>=1 && r<= 8 && c>=1 && c<=8) "out of the board"
+
+isPawnMove :: Board -> Pos_q -> Pos_q -> Log
 isPawnMove b (c0, r0) (c1, r1) = case takePiece b (c0,r0) of
-  Nothing -> False
-  Just (P c Pawn) -> (c0==c1 && r1==r0-1 && c==Black) ||                  --regular (black)
-                     (c0==c1 && r1==r0+1 && c==White) ||                  --regular (white)
-                     (c0==c1 && r0==7 && r1==5 && c==Black) ||            --2 rank (black)
-                     (c0==c1 && r0==2 && r1==4 && c==White) ||            --2 rank (white)
-                     (abs (c0-c1)==1 && r1==r0-1 && cpt c && c==Black) || --capture (black)
-                     (abs (c0-c1)==1 && r1==r0+1 && cpt c && c==White) || --capture (white)
-                     (isEnPasse b (c0,r0) (c1, r1)) && (isFree b (c0,r0) (c1, r1))
+  Nothing -> Fail "empty cell"
+  Just (P c Pawn) -> mkLog (
+    (c0==c1 && r1==r0-1 && c==Black) ||                  --regular (black)
+    (c0==c1 && r1==r0+1 && c==White) ||                  --regular (white)
+    (c0==c1 && r0==7 && r1==5 && c==Black) ||            --2 rank (black)
+    (c0==c1 && r0==2 && r1==4 && c==White) ||            --2 rank (white)
+    (abs (c0-c1)==1 && r1==r0-1 && cpt c && c==Black) || --capture (black)
+    (abs (c0-c1)==1 && r1==r0+1 && cpt c && c==White) || --capture (white)
+    (isEnPasse b (c0,r0) (c1, r1))
+    ) "not a pawn move"
   where
     cpt color = case takePiece b (c1, r1) of
       Just (P c _) -> color /= c
       otherwise    -> False
 
-isStraight :: Pos_q -> Pos_q -> Int -> Bool
-isStraight (c0, r0) (c1,r1) span = (c0==c1 && foldr (\x y -> x==c1 || y) False [c0-span..c0+span]) || -- horizontal
-                                   (r0==r1 && foldr (\x y -> x==r1 || y) False [r0-span..r0+span])    -- vertical
+isStraight :: Pos_q -> Pos_q -> Int -> Log
+isStraight (c0, r0) (c1,r1) span = mkLog (
+  (c0==c1 && foldr (\x y -> x==c1 || y) False [c0-span..c0+span]) || -- horizontal
+  (r0==r1 && foldr (\x y -> x==r1 || y) False [r0-span..r0+span])    -- vertical
+  ) "this piece can only move on a straight line"
 
-isDiagonal :: Pos_q -> Pos_q -> Int -> Bool
-isDiagonal (c0, r0) (c1,r1) span = abs (c1-c0) == abs (r1-r0) && abs (c1-c0)<=span
+isDiagonal :: Pos_q -> Pos_q -> Int -> Log
+isDiagonal (c0, r0) (c1,r1) span = mkLog (
+  abs (c1-c0) == abs (r1-r0) && abs (c1-c0)<=span
+  ) "this piece can only move on a diagonal line"
 
-isLShaped :: Pos_q -> Pos_q -> Bool
-isLShaped (c0, r0) (c1,r1) = abs (c1-c0) + abs (r1-r0) == 3
+isLShaped :: Pos_q -> Pos_q -> Log
+isLShaped (c0, r0) (c1,r1) = mkLog (
+  abs (c1-c0) + abs (r1-r0) == 3
+  ) "this piece can only move in L shape"
 
 --special moves
 isEnPasse :: Board -> Pos_q -> Pos_q -> Bool
@@ -182,10 +195,15 @@ isEnPasse b (c0, r0) (c1,r1) = case takePiece b (c0,r0) of
 isRook :: Board -> from -> to
 isRook = undefined
 
-isFree :: Board -> Pos_q -> Pos_q -> Bool
-isFree b from to = case takePiece b from of
+isFree :: Board -> Pos_q -> Pos_q -> Log
+isFree b from to = mkLog (
+  isFree' b from to
+  ) "move is obstructed"
+
+isFree' :: Board -> Pos_q -> Pos_q -> Bool
+isFree' b from to = case takePiece b from of
   Just (P c Pawn  ) -> canMove b to c
-  Just (P c Knight) -> isTarget b to c
+  Just (P c Knight) -> canMove b to c
   Just (P c Bishop) -> diagonalCheck c && canMove b to c
   Just (P c Rook  ) -> straightCheck c && canMove b to c
   Just (P c Queen ) -> (diagonalCheck c || straightCheck c) && canMove b to c
@@ -197,19 +215,21 @@ isFree b from to = case takePiece b from of
     dirc = if difc<0 then -1 else 1
     difr = (r0 - r1)
     dirr = if difr<0 then -1 else 1
-    isTarget b pos color = case takePiece b pos of
-      Nothing   -> True
-      Just (P c t) -> c /= color
     canMove b pos color = case takePiece b pos of
       Nothing   -> True
-      otherwise -> False
+      Just (P c t) -> c /= color
     straightCheck color = if r0==r1 
                             then foldr (\i r -> r && canMove b (c0+i,r0) color) True [0,dirc..difc] 
                             else foldr (\i r -> r && canMove b (c0,r0+i) color) True [0,dirr..difc] 
     diagonalCheck color = foldr (\(ic, ir) r -> r && canMove b (c0+ic, r0+ir) color) True (zip [0,dirc..difc] [0,dirr..difr])
 
-isKingSafe :: Board -> Color -> Pos_q -> Pos_q -> Bool
-isKingSafe b turn from to = case (takePiece b from) of
+isKingSafe :: Board -> Color -> Pos_q -> Pos_q -> Log
+isKingSafe b turn from to = mkLog (
+  isKingSafe' b turn from to
+  ) $ (show turn) ++ " king is not safe"
+
+isKingSafe' :: Board -> Color -> Pos_q -> Pos_q -> Bool
+isKingSafe' b turn from to = case (takePiece b from) of
   Nothing -> False -- non-existent case: validateMove ensures this.
   Just movingPiece -> iterDiagonal Queen myKing && 
                       iterStraight Queen myKing && 
