@@ -133,7 +133,20 @@ move' from to g = case (takePiece b from) of
     (c0, r0) = from
 
 makeMove :: Board -> Piece -> Pos_q -> Pos_q -> Board
-makeMove b piece from to = M.insert to piece (M.delete from b)
+makeMove b piece from to = if isRook' b from to
+  then makeRookMove b piece from to
+  else if isEnPasse' b from to
+    then makeEnPasseMove b piece from to
+    else M.insert to piece $ M.delete from b
+
+makeRookMove :: Board -> Piece -> Pos_q -> Pos_q -> Board
+makeRookMove b (P c King) from to = undefined
+makeRookMove b _ _ _ = b
+
+makeEnPasseMove :: Board -> Piece -> Pos_q -> Pos_q -> Board
+makeEnPasseMove b pawn from to =  M.insert to pawn $ M.delete from $ M.delete (c1,r0) b
+  where (c0, r0) = from
+        (c1, r1) = to
 
 doesTurnMatch :: Color -> Color -> Log
 doesTurnMatch t c = mkLog (t==c) $ "not " ++ (show c) ++ "'s turn"
@@ -144,7 +157,7 @@ validateMove b (P _ Knight) from to = mconcat [diffCheck from to, isInsideBoard 
 validateMove b (P _ Bishop) from to = mconcat [diffCheck from to, isInsideBoard to, isDiagonal from to 8, isFree b from to]
 validateMove b (P _ Rook)   from to = mconcat [diffCheck from to, isInsideBoard to, isStraight from to 8, isFree b from to]
 validateMove b (P _ Queen)  from to = mconcat [diffCheck from to, isInsideBoard to, (isStraight from to 8 <|> isDiagonal from to 8), isFree b from to]
-validateMove b (P _ King)   from to = mconcat [diffCheck from to, isInsideBoard to, (isStraight from to 1 <|> isDiagonal from to 1), isFree b from to]
+validateMove b (P _ King)   from to = mconcat [diffCheck from to, isInsideBoard to, (isStraight from to 1 <|> isDiagonal from to 1 <|> isRook b from to), isFree b from to]
 
 diffCheck :: Pos_q -> Pos_q -> Log
 diffCheck from to = mkLog (from/=to) "non-move"
@@ -162,7 +175,7 @@ isPawnMove b (c0, r0) (c1, r1) = case takePiece b (c0,r0) of
     (c0==c1 && r0==2 && r1==4 && c==White) ||            --2 rank (white)
     (abs (c0-c1)==1 && r1==r0-1 && cpt c && c==Black) || --capture (black)
     (abs (c0-c1)==1 && r1==r0+1 && cpt c && c==White) || --capture (white)
-    (isEnPasse b (c0,r0) (c1, r1))
+    (isEnPasse' b (c0,r0) (c1, r1))
     ) "not a pawn move"
   where
     cpt color = case takePiece b (c1, r1) of
@@ -186,14 +199,26 @@ isLShaped (c0, r0) (c1,r1) = mkLog (
   ) "this piece can only move in L shape"
 
 --special moves
-isEnPasse :: Board -> Pos_q -> Pos_q -> Bool
-isEnPasse b (c0, r0) (c1,r1) = case takePiece b (c0,r0) of
+isEnPasse :: Board -> Pos_q -> Pos_q -> Log
+isEnPasse b from to = mkLog (isEnPasse' b from to) "invalid en passe"
+
+isEnPasse' :: Board -> Pos_q -> Pos_q -> Bool
+isEnPasse' b (c0, r0) (c1,r1) = case takePiece b (c0,r0) of
   Nothing -> False
   Just (P White Pawn) -> (r0==5 || r0==6) && (r1==r0+1) && (takePiece b (c1,r0))==(Just (P Black Pawn)) 
   Just (P Black Pawn) -> (r0==3 || r0==4) && (r1==r0-1) && (takePiece b (c1,r0))==(Just (P White Pawn)) 
+  otherwise -> False
 
-isRook :: Board -> from -> to
-isRook = undefined
+isRook :: Board -> Pos_q -> Pos_q -> Log
+isRook b from to = mkLog (
+  isRook' b from to
+  ) "invalid rook"
+
+isRook' :: Board -> Pos_q -> Pos_q -> Bool
+isRook' b from to = case takePiece b from of 
+  Just (P c King) -> nextToRook b from to
+  otherwise -> False
+  where nextToRook b f t = False
 
 isFree :: Board -> Pos_q -> Pos_q -> Log
 isFree b from to = mkLog (
