@@ -19,8 +19,10 @@ instance Show Piece where
   show (White King  ) = "♔"
   show (Black King  ) = "♚"
 
-type Position = (Int, Int)
-type Board = M.Map Position Piece
+data Col = A | B | C | D | E | F | G | H deriving Eq
+type Position = (Col, Int)
+type Pos_q = (Int, Int)
+type Board = M.Map Pos_q Piece
 
 data Game = Game { gBoard :: Board, gTurn :: String , gLog :: [String]}
 
@@ -49,7 +51,7 @@ instance Show Game where
       ) "" [1..64] ++
     foldr (\i s -> (i:" ") ++ s) 
           "" ['a'..'h'] ++ "\n" ++ "\n" ++
-    foldr (\(i, e) s -> (show i) ++ ". " ++ e ++ "\n" ++ s) 
+    foldr (\(i, e) s -> (show i) ++ "." ++ e ++ " " ++ s) 
           "" (zip [1..] $ reverse l)
 
 
@@ -57,11 +59,16 @@ main :: IO ()
 main = do
  let game = Game {gBoard = initializeBoard, gTurn = "White", gLog = []}
  putStrLn $ show 
-                 $ move (5,4) (4,5)
-                 $ move (7,8) (6,6)
-                 $ move (5,2) (5,4)
-                 $ move (4,7) (4,5)
-                 $ move (4,2) (4,4)
+                 $ move (D,8) (D,6)
+                 $ move (G,2) (H,3)
+                 $ move (C,8) (H,3)
+                 $ move (F,1) (C,4)
+                 $ move (F,6) (D,5)
+                 $ move (E,4) (D,5)
+                 $ move (G,8) (F,6)
+                 $ move (E,2) (E,4)
+                 $ move (D,7) (D,5)
+                 $ move (D,2) (D,4)
                  game 
 
 initializeBoard :: Board
@@ -101,11 +108,22 @@ initializeBoard = M.fromList [
   ((8,2), White Pawn)
   ]
 
-takePiece :: Board -> Position -> Maybe Piece
+takePiece :: Board -> Pos_q -> Maybe Piece
 takePiece b p = M.lookup p b
 
 move :: Position -> Position -> Game -> Game
-move from to g = case (takePiece b from) of
+move (c0, r0) (c1, r1) g = move' (cnum c0, r0) (cnum c1, r1) g
+  where cnum c = case c of A -> 1
+                           B -> 2
+                           C -> 3
+                           D -> 4
+                           E -> 5
+                           F -> 6
+                           G -> 7
+                           H -> 8
+
+move' :: Pos_q -> Pos_q -> Game -> Game
+move' from to g = case (takePiece b from) of
   Nothing -> Game { gBoard = b, gTurn = t, gLog = (("invalid location "++show from):l)}
   Just (White typ)  ->
     if t=="White" && validateMove b (White typ) from to
@@ -120,82 +138,82 @@ move from to g = case (takePiece b from) of
                   gLog = genLog (Black typ)}
       else Game { gBoard = b, gTurn = t, gLog = ("not black's turn":l)}
   where 
-    genLog p = ((show p ++ " " ++ ((['a'..'h']!!(c0-1)) : show r0) ++ " "++ show p ++ " " ++ ((['a'..'h']!!(c1-1)) : show r1) ++ ""):l)
+    genLog p = ((show p ++ " " ++ ((['a'..'h']!!(c0-1)) : show r0) ++ ""++ show p ++ " " ++ ((['a'..'h']!!(c1-1)) : show r1) ++ ""):l)
     b = gBoard g
     t = gTurn g
     l = gLog g
     (c1, r1) = to
     (c0, r0) = from
 
-validateMove :: Board -> Piece -> Position -> Position -> Bool
-validateMove b (White Pawn)   from to = from/=to && isInsideBoard to && isPawnMove b from to && isFree b from to 
-validateMove b (Black Pawn)   from to = from/=to && isInsideBoard to && isPawnMove b from to && isFree b from to
+validateMove :: Board -> Piece -> Pos_q -> Pos_q -> Bool
+validateMove b (White Pawn)   from to = from/=to && isInsideBoard to && isPawnMove b from to
+validateMove b (Black Pawn)   from to = from/=to && isInsideBoard to && isPawnMove b from to
 validateMove b (White Knight) from to = from/=to && isInsideBoard to && isLShaped from to && isFree b from to 
 validateMove b (Black Knight) from to = from/=to && isInsideBoard to && isLShaped from to && isFree b from to 
 validateMove b (White Bishop) from to = from/=to && isInsideBoard to && isDiagonal from to 8 && isFree b from to
 validateMove b (Black Bishop) from to = from/=to && isInsideBoard to && isDiagonal from to 8 && isFree b from to
 validateMove b (White Rook)   from to = from/=to && isInsideBoard to && isStraight from to 8 && isFree b from to
 validateMove b (Black Rook)   from to = from/=to && isInsideBoard to && isStraight from to 8 && isFree b from to
-validateMove b (White Queen)  from to = from/=to && isInsideBoard to && isStraight from to 8 || isDiagonal from to 8 && isFree b from to
-validateMove b (Black Queen)  from to = from/=to && isInsideBoard to && isStraight from to 8 || isDiagonal from to 8 && isFree b from to
-validateMove b (White King)   from to = from/=to && isInsideBoard to && isStraight from to 1 || isDiagonal from to 1 && isFree b from to
-validateMove b (Black King)   from to = from/=to && isInsideBoard to && isStraight from to 1 || isDiagonal from to 1 && isFree b from to
+validateMove b (White Queen)  from to = from/=to && isInsideBoard to && (isStraight from to 8 || isDiagonal from to 8) && isFree b from to
+validateMove b (Black Queen)  from to = from/=to && isInsideBoard to && (isStraight from to 8 || isDiagonal from to 8) && isFree b from to
+validateMove b (White King)   from to = from/=to && isInsideBoard to && (isStraight from to 1 || isDiagonal from to 1) && isFree b from to
+validateMove b (Black King)   from to = from/=to && isInsideBoard to && (isStraight from to 1 || isDiagonal from to 1) && isFree b from to
 
 
-isInsideBoard :: Position -> Bool
+isInsideBoard :: Pos_q -> Bool
 isInsideBoard (c,r)= r>=1 && r<= 8 && c>=1 && c<=8
 
-isPawnMove :: Board -> Position -> Position -> Bool
+isPawnMove :: Board -> Pos_q -> Pos_q -> Bool
 isPawnMove b (c0,r0) (c1,r1) = case takePiece b (c0,r0) of
   Nothing -> False
-  Just (White Pawn) -> (c0==c1 && r1==r0+1) ||                                         --regular
-                       (c0==c1 && r0==2 && r1==4) ||                                   --2 rank
-                       ((abs c0-c1)==1 && r1==r0+1 && canBeCaptured b (c1,r1) "white") --capture
-  Just (Black Pawn) -> (c0==c1 && r1==r0-1) ||                                         --regular
-                       (c0==c1 && r0==7 && r1==5) ||                                   --2 rank
-                       ((abs c0-c1)==1 && r1==r0-1 && canBeCaptured b (c1,r1) "black") --capture
+  Just (White Pawn) -> (c0==c1 && r1==r0+1) ||       --regular
+                       (c0==c1 && r0==2 && r1==4) || --2 rank
+                       (abs (c0-c1)==1 && r1==r0+1 && cpt "white")  --capture
+  Just (Black Pawn) -> (c0==c1 && r1==r0-1) ||       --regular
+                       (c0==c1 && r0==7 && r1==5) || --2 rank
+                       (abs (c0-c1)==1 && r1==r0-1 && cpt "black")  --capture
   where
-    canBeCaptured b pos color = case takePiece b pos of
+    cpt color = case takePiece b (c1, r1) of
       Just (White _) -> color == "black"
       Just (Black _) -> color == "white"
+      otherwise      -> False
 
-isStraight :: Position -> Position -> Int -> Bool
+isStraight :: Pos_q -> Pos_q -> Int -> Bool
 isStraight (c0, r0) (c1,r1) span = (c0==c1 && foldr (\x y -> x==c1 || y) False [c0-span..c0+span]) || -- horizontal
                                    (r0==r1 && foldr (\x y -> x==r1 || y) False [r0-span..r0+span])    -- vertical
 
-isDiagonal :: Position -> Position -> Int -> Bool
+isDiagonal :: Pos_q -> Pos_q -> Int -> Bool
 isDiagonal (c0, r0) (c1,r1) span = abs (c1-c0) == abs (r1-r0) && abs (c1-c0)<=span
 
-isLShaped :: Position -> Position -> Bool
+isLShaped :: Pos_q -> Pos_q -> Bool
 isLShaped (c0, r0) (c1,r1) = abs (c1-c0) + abs (r1-r0) == 3
 
-isFree :: Board -> Position -> Position -> Bool
+isFree :: Board -> Pos_q -> Pos_q -> Bool
 isFree b from to = case takePiece b from of
-  Just (White Pawn  ) -> takePiece b to == Nothing
-  Just (Black Pawn  ) -> takePiece b to == Nothing
+  Just (White Pawn  ) -> isMovable b to "white"
+  Just (Black Pawn  ) -> isMovable b to "black"
   Just (White Knight) -> isMovable b to "white"
   Just (Black Knight) -> isMovable b to "black"
-  Just (White Bishop) -> diagonalCheck "white"
-  Just (Black Bishop) -> diagonalCheck "black"
-  Just (White Rook  ) -> straightCheck "white"
-  Just (Black Rook  ) -> straightCheck "black"
-  Just (White Queen ) -> diagonalCheck "white" || straightCheck "white"
-  Just (Black Queen ) -> diagonalCheck "black" || straightCheck "black"
-  Just (White King  ) -> diagonalCheck "white" || straightCheck "white"
-  Just (Black King  ) -> diagonalCheck "black" || straightCheck "black"
+  Just (White Bishop) -> diagonalCheck "white" && isMovable b to "white"
+  Just (Black Bishop) -> diagonalCheck "black" && isMovable b to "black"
+  Just (White Rook  ) -> straightCheck "white" && isMovable b to "white"
+  Just (Black Rook  ) -> straightCheck "black" && isMovable b to "black"
+  Just (White Queen ) -> (diagonalCheck "white" || straightCheck "white") && isMovable b to "white"
+  Just (Black Queen ) -> (diagonalCheck "black" || straightCheck "black") && isMovable b to "black"
+  Just (White King  ) -> (diagonalCheck "white" || straightCheck "white") && isMovable b to "white"
+  Just (Black King  ) -> (diagonalCheck "black" || straightCheck "black") && isMovable b to "black"
   where 
     (r0, c0) = from
     (r1, c1) = to
-    minr = min r0 r1
-    maxr = max r0 r1
-    minc = min c0 c1
-    maxc = max c0 c1
-    diff = (maxc - minc)
-    canBeCaptured b pos color = case takePiece b pos of
+    difc = (c0 - c1) + 1
+    dirc = div difc (abs difc) 
+    difr = (r0 - r1) + 1
+    dirr = div difr (abs difr) 
+    isMovable b pos color = case takePiece b pos of
+      Nothing        -> True
       Just (White _) -> color == "black"
       Just (Black _) -> color == "white"
-    isMovable b pos color = takePiece b pos == Nothing || canBeCaptured b pos color
     straightCheck color = if r0==r1 
-                            then foldr (\i r -> r && isMovable b (i,r0) color) True [minc..maxc] 
-                            else foldr (\i r -> r && isMovable b (c0,i) color) True [minr..maxr] 
-    diagonalCheck color = foldr (\i r -> r && isMovable b (c0+i,r0+i) color) True [0..diff]
+                            then foldr (\i r -> r && isMovable b (c0+i,r0) color) True [0,dirc..difc] 
+                            else foldr (\i r -> r && isMovable b (c0,r0+i) color) True [0,dirr..difc] 
+    diagonalCheck color = foldr (\(ic, ir) r -> r && isMovable b (c0+ic, r0+ir) color) True (zip [0,dirc..difc] [0,dirr..difr])
