@@ -3,28 +3,30 @@ module Chess where
 import qualified Data.Map as M
 
 data Type = Pawn | Knight | Bishop | Rook | Queen | King deriving (Show, Eq)
-data Piece = White Type | Black Type deriving Eq
+data Color = Black | White deriving (Show, Eq)
+data Piece = P Color Type deriving Eq
 
 instance Show Piece where
-  show (White Pawn  ) = "♙"
-  show (Black Pawn  ) = "♟"
-  show (White Knight) = "♘"
-  show (Black Knight) = "♞"
-  show (White Bishop) = "♗"
-  show (Black Bishop) = "♝"
-  show (White Rook  ) = "♖"
-  show (Black Rook  ) = "♜"
-  show (White Queen ) = "♕"
-  show (Black Queen ) = "♛"
-  show (White King  ) = "♔"
-  show (Black King  ) = "♚"
+  show (P White Pawn  ) = "♙"
+  show (P Black Pawn  ) = "♟"
+  show (P White Knight) = "♘"
+  show (P Black Knight) = "♞"
+  show (P White Bishop) = "♗"
+  show (P Black Bishop) = "♝"
+  show (P White Rook  ) = "♖"
+  show (P Black Rook  ) = "♜"
+  show (P White Queen ) = "♕"
+  show (P Black Queen ) = "♛"
+  show (P White King  ) = "♔"
+  show (P Black King  ) = "♚"
 
 data Col = A | B | C | D | E | F | G | H deriving Eq
 type Position = (Col, Int)
 type Pos_q = (Int, Int)
 type Board = M.Map Pos_q Piece
+type Areas = M.Map Pos_q Color
 
-data Game = Game { gBoard :: Board, gTurn :: String , gLog :: [String]}
+data Game = Game { gBoard :: Board, gTurn :: Color , gLog :: [String]}
 
 instance Show Game where
   show (Game {gBoard = b, gTurn = t, gLog = l}) =
@@ -57,7 +59,7 @@ instance Show Game where
 
 main :: IO ()
 main = do
- let game = Game {gBoard = initializeBoard, gTurn = "White", gLog = []}
+ let game = Game {gBoard = initializeBoard, gTurn = White, gLog = []}
  putStrLn $ show 
                  $ move (D,8) (D,6)
                  $ move (G,2) (H,3)
@@ -73,39 +75,39 @@ main = do
 
 initializeBoard :: Board
 initializeBoard = M.fromList [
-  ((1,8), Black Rook),
-  ((2,8), Black Knight),
-  ((3,8), Black Bishop),
-  ((4,8), Black Queen),
-  ((5,8), Black King),
-  ((6,8), Black Bishop),
-  ((7,8), Black Knight),
-  ((8,8), Black Rook),
-  ((1,7), Black Pawn),
-  ((2,7), Black Pawn),
-  ((3,7), Black Pawn),
-  ((4,7), Black Pawn),
-  ((5,7), Black Pawn),
-  ((6,7), Black Pawn),
-  ((7,7), Black Pawn),
-  ((8,7), Black Pawn),
+  ((1,8), P Black Rook),
+  ((2,8), P Black Knight),
+  ((3,8), P Black Bishop),
+  ((4,8), P Black Queen),
+  ((5,8), P Black King),
+  ((6,8), P Black Bishop),
+  ((7,8), P Black Knight),
+  ((8,8), P Black Rook),
+  ((1,7), P Black Pawn),
+  ((2,7), P Black Pawn),
+  ((3,7), P Black Pawn),
+  ((4,7), P Black Pawn),
+  ((5,7), P Black Pawn),
+  ((6,7), P Black Pawn),
+  ((7,7), P Black Pawn),
+  ((8,7), P Black Pawn),
 
-  ((1,1), White Rook),
-  ((2,1), White Knight),
-  ((3,1), White Bishop),
-  ((4,1), White Queen),
-  ((5,1), White King),
-  ((6,1), White Bishop),
-  ((7,1), White Knight),
-  ((8,1), White Rook),
-  ((1,2), White Pawn),
-  ((2,2), White Pawn),
-  ((3,2), White Pawn),
-  ((4,2), White Pawn),
-  ((5,2), White Pawn),
-  ((6,2), White Pawn),
-  ((7,2), White Pawn),
-  ((8,2), White Pawn)
+  ((1,1), P White Rook),
+  ((2,1), P White Knight),
+  ((3,1), P White Bishop),
+  ((4,1), P White Queen),
+  ((5,1), P White King),
+  ((6,1), P White Bishop),
+  ((7,1), P White Knight),
+  ((8,1), P White Rook),
+  ((1,2), P White Pawn),
+  ((2,2), P White Pawn),
+  ((3,2), P White Pawn),
+  ((4,2), P White Pawn),
+  ((5,2), P White Pawn),
+  ((6,2), P White Pawn),
+  ((7,2), P White Pawn),
+  ((8,2), P White Pawn)
   ]
 
 takePiece :: Board -> Pos_q -> Maybe Piece
@@ -125,18 +127,13 @@ move (c0, r0) (c1, r1) g = move' (cnum c0, r0) (cnum c1, r1) g
 move' :: Pos_q -> Pos_q -> Game -> Game
 move' from to g = case (takePiece b from) of
   Nothing -> Game { gBoard = b, gTurn = t, gLog = (("invalid location "++show from):l)}
-  Just (White typ)  ->
-    if t=="White" && validateMove b (White typ) from to
-      then Game { gBoard = M.insert to (White typ) (M.delete from b), 
-                  gTurn = "Black", 
-                  gLog = genLog (White typ)}
-      else Game { gBoard = b, gTurn = t, gLog = ("not white's turn":l)}
-  Just (Black typ)  ->
-    if t=="Black" && validateMove b (Black typ) from to
-      then Game { gBoard = M.insert to (Black typ) (M.delete from b), 
-                  gTurn = "White", 
-                  gLog = genLog (Black typ)}
-      else Game { gBoard = b, gTurn = t, gLog = ("not black's turn":l)}
+  Just piece  ->
+    let (P color _) = piece in
+      if t==color && validateMove b piece from to
+        then Game { gBoard = M.insert to piece (M.delete from b), 
+                    gTurn = if color == Black then White else Black, 
+                    gLog = genLog piece}
+        else Game { gBoard = b, gTurn = t, gLog = ("invalid move":l)}
   where 
     genLog p = ((show p ++ " " ++ ((['a'..'h']!!(c0-1)) : show r0) ++ ""++ show p ++ " " ++ ((['a'..'h']!!(c1-1)) : show r1) ++ ""):l)
     b = gBoard g
@@ -146,18 +143,12 @@ move' from to g = case (takePiece b from) of
     (c0, r0) = from
 
 validateMove :: Board -> Piece -> Pos_q -> Pos_q -> Bool
-validateMove b (White Pawn)   from to = from/=to && isInsideBoard to && isPawnMove b from to
-validateMove b (Black Pawn)   from to = from/=to && isInsideBoard to && isPawnMove b from to
-validateMove b (White Knight) from to = from/=to && isInsideBoard to && isLShaped from to && isFree b from to 
-validateMove b (Black Knight) from to = from/=to && isInsideBoard to && isLShaped from to && isFree b from to 
-validateMove b (White Bishop) from to = from/=to && isInsideBoard to && isDiagonal from to 8 && isFree b from to
-validateMove b (Black Bishop) from to = from/=to && isInsideBoard to && isDiagonal from to 8 && isFree b from to
-validateMove b (White Rook)   from to = from/=to && isInsideBoard to && isStraight from to 8 && isFree b from to
-validateMove b (Black Rook)   from to = from/=to && isInsideBoard to && isStraight from to 8 && isFree b from to
-validateMove b (White Queen)  from to = from/=to && isInsideBoard to && (isStraight from to 8 || isDiagonal from to 8) && isFree b from to
-validateMove b (Black Queen)  from to = from/=to && isInsideBoard to && (isStraight from to 8 || isDiagonal from to 8) && isFree b from to
-validateMove b (White King)   from to = from/=to && isInsideBoard to && (isStraight from to 1 || isDiagonal from to 1) && isFree b from to
-validateMove b (Black King)   from to = from/=to && isInsideBoard to && (isStraight from to 1 || isDiagonal from to 1) && isFree b from to
+validateMove b (P _ Pawn)   from to = from/=to && isInsideBoard to && isPawnMove b from to
+validateMove b (P _ Knight) from to = from/=to && isInsideBoard to && isLShaped from to && isFree b from to 
+validateMove b (P _ Bishop) from to = from/=to && isInsideBoard to && isDiagonal from to 8 && isFree b from to
+validateMove b (P _ Rook)   from to = from/=to && isInsideBoard to && isStraight from to 8 && isFree b from to
+validateMove b (P _ Queen)  from to = from/=to && isInsideBoard to && (isStraight from to 8 || isDiagonal from to 8) && isFree b from to
+validateMove b (P _ King)   from to = from/=to && isInsideBoard to && (isStraight from to 1 || isDiagonal from to 1) && isFree b from to
 
 
 isInsideBoard :: Pos_q -> Bool
@@ -166,17 +157,16 @@ isInsideBoard (c,r)= r>=1 && r<= 8 && c>=1 && c<=8
 isPawnMove :: Board -> Pos_q -> Pos_q -> Bool
 isPawnMove b (c0,r0) (c1,r1) = case takePiece b (c0,r0) of
   Nothing -> False
-  Just (White Pawn) -> (c0==c1 && r1==r0+1) ||       --regular
-                       (c0==c1 && r0==2 && r1==4) || --2 rank
-                       (abs (c0-c1)==1 && r1==r0+1 && cpt "white")  --capture
-  Just (Black Pawn) -> (c0==c1 && r1==r0-1) ||       --regular
-                       (c0==c1 && r0==7 && r1==5) || --2 rank
-                       (abs (c0-c1)==1 && r1==r0-1 && cpt "black")  --capture
+  Just (P c Pawn) -> (c0==c1 && r1==r0-1 && c==Black) ||                  --regular (black)
+                     (c0==c1 && r1==r0+1 && c==White) ||                  --regular (white)
+                     (c0==c1 && r0==7 && r1==5 && c==Black) ||            --2 rank (black)
+                     (c0==c1 && r0==2 && r1==4 && c==White) ||            --2 rank (white)
+                     (abs (c0-c1)==1 && r1==r0-1 && cpt c && c==Black) || --capture (black)
+                     (abs (c0-c1)==1 && r1==r0+1 && cpt c && c==White)    --capture (white)
   where
     cpt color = case takePiece b (c1, r1) of
-      Just (White _) -> color == "black"
-      Just (Black _) -> color == "white"
-      otherwise      -> False
+      Just (P c _) -> color /= c
+      otherwise    -> False
 
 isStraight :: Pos_q -> Pos_q -> Int -> Bool
 isStraight (c0, r0) (c1,r1) span = (c0==c1 && foldr (\x y -> x==c1 || y) False [c0-span..c0+span]) || -- horizontal
@@ -190,30 +180,29 @@ isLShaped (c0, r0) (c1,r1) = abs (c1-c0) + abs (r1-r0) == 3
 
 isFree :: Board -> Pos_q -> Pos_q -> Bool
 isFree b from to = case takePiece b from of
-  Just (White Pawn  ) -> isMovable b to "white"
-  Just (Black Pawn  ) -> isMovable b to "black"
-  Just (White Knight) -> isMovable b to "white"
-  Just (Black Knight) -> isMovable b to "black"
-  Just (White Bishop) -> diagonalCheck "white" && isMovable b to "white"
-  Just (Black Bishop) -> diagonalCheck "black" && isMovable b to "black"
-  Just (White Rook  ) -> straightCheck "white" && isMovable b to "white"
-  Just (Black Rook  ) -> straightCheck "black" && isMovable b to "black"
-  Just (White Queen ) -> (diagonalCheck "white" || straightCheck "white") && isMovable b to "white"
-  Just (Black Queen ) -> (diagonalCheck "black" || straightCheck "black") && isMovable b to "black"
-  Just (White King  ) -> (diagonalCheck "white" || straightCheck "white") && isMovable b to "white"
-  Just (Black King  ) -> (diagonalCheck "black" || straightCheck "black") && isMovable b to "black"
+  Just (P c Pawn  ) -> isMovable b to c
+  Just (P c Knight) -> isTarget b to c
+  Just (P c Bishop) -> diagonalCheck c && isMovable b to c
+  Just (P c Rook  ) -> straightCheck c && isMovable b to c
+  Just (P c Queen ) -> (diagonalCheck c || straightCheck c) && isMovable b to c
+  Just (P c King  ) -> (diagonalCheck c || straightCheck c) && isMovable b to c
   where 
     (r0, c0) = from
     (r1, c1) = to
-    difc = (c0 - c1) + 1
-    dirc = div difc (abs difc) 
-    difr = (r0 - r1) + 1
-    dirr = div difr (abs difr) 
+    difc = (c0 - c1)
+    dirc = if difc<0 then -1 else 1
+    difr = (r0 - r1)
+    dirr = if difr<0 then -1 else 1
+    isTarget b pos color = case takePiece b pos of
+      Nothing   -> True
+      Just (P c t) -> c /= color
     isMovable b pos color = case takePiece b pos of
-      Nothing        -> True
-      Just (White _) -> color == "black"
-      Just (Black _) -> color == "white"
+      Nothing   -> True
+      otherwise -> False
     straightCheck color = if r0==r1 
                             then foldr (\i r -> r && isMovable b (c0+i,r0) color) True [0,dirc..difc] 
                             else foldr (\i r -> r && isMovable b (c0,r0+i) color) True [0,dirr..difc] 
     diagonalCheck color = foldr (\(ic, ir) r -> r && isMovable b (c0+ic, r0+ir) color) True (zip [0,dirc..difc] [0,dirr..difr])
+
+updateAoI :: Board -> Areas
+updateAoI = undefined
