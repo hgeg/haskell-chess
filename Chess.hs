@@ -61,7 +61,9 @@ main :: IO ()
 main = do
  let game = Game {gBoard = initializeBoard, gTurn = White, gLog = []}
  putStrLn $ show 
-                 $ move (E,1) (E,2)
+                 $ move (F,3) (E,5)
+                 $ move (D,6) (E,6)
+                 $ move (A,2) (A,3)
                  $ move (D,5) (C,3)
                  $ move (G,1) (F,3)
                  $ move (D,8) (D,6)
@@ -112,6 +114,9 @@ initializeBoard = M.fromList [
   ((7,2), P White Pawn),
   ((8,2), P White Pawn)
   ]
+
+takeWhile' :: (a -> Bool) -> [a] -> [a]
+takeWhile' p = foldr (\x ys -> if p x then x:ys else [x]) []
 
 takePiece :: Board -> Pos_q -> Maybe Piece
 takePiece b p = M.lookup p b
@@ -215,17 +220,21 @@ isFree b from to = case takePiece b from of
 
 isKingSafe :: Board -> Color -> Pos_q -> Pos_q -> Bool
 isKingSafe b turn from to = case (takePiece b from) of
-  Nothing -> False -- non-existent case. validateMove ensures this.
-  Just movingPiece -> iterDiagonal Queen myKing && iterStraight Queen myKing && iterLShaped myKing
+  Nothing -> False -- non-existent case: validateMove ensures this.
+  Just movingPiece -> iterDiagonal Queen myKing && 
+                      iterStraight Queen myKing && 
+                      iterLShaped        myKing
     where nb = makeMove b movingPiece from to --possible next state
           myKing = findPiece nb (P turn King)
           opponent = if turn == White then Black else White
           iterDiagonal t (Just (c, r)) = True
           iterStraight t (Just (c, r)) = and $ map ((/=(Just (P opponent t))).(takePiece nb)) $ 
-            [((takeWhile (\cx -> isMovable nb (cx,r)) [c..8]), r)] ++
-            [((takeWhile (\cx -> isMovable nb (cx,r)) [c,-1..0]), r)] ++
-            [(c, (takeWhile (\rx -> isMovable nb (c,rx)) [r..8]))] ++
-            [(c, (takeWhile (\rx -> isMovable nb (c,rx)) [r,-1..0]))]
+            map (\cx -> (cx,r)) (
+              (takeWhile' (\cx -> isMovable nb (cx,r)) [(c+1)..8]) ++ 
+              (takeWhile' (\cx -> isMovable nb (cx,r)) [(c-1),(c-2)..0]) ) ++
+            map (\rx -> (c,rx)) (
+              (takeWhile' (\rx -> isMovable nb (c,rx)) [(r+1)..8]) ++ 
+              (takeWhile' (\rx -> isMovable nb (c,rx)) [(r-1),(r-2)..0]) )
           iterLShaped  (Just (c, r)) = and $ map ((/=(Just (P opponent Knight))).(takePiece nb)) [(c-2,r-1), (c-2,r+1), (c+2,r-1), (c-2, r+1), (c-1,r-2), (c-1,r+2), (c+1,r-2), (c+1,r+2)]
           isMovable b pos = case takePiece b pos of
             Nothing   -> True
