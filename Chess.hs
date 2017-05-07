@@ -1,6 +1,7 @@
 module Chess where
 
 import qualified Data.Map as M
+import Data.List
 
 data Type = Pawn | Knight | Bishop | Rook | Queen | King deriving (Show, Eq)
 data Color = Black | White deriving (Show, Eq)
@@ -24,7 +25,6 @@ data Col = A | B | C | D | E | F | G | H deriving Eq
 type Position = (Col, Int)
 type Pos_q = (Int, Int)
 type Board = M.Map Pos_q Piece
-type Areas = M.Map Pos_q Color
 
 data Game = Game { gBoard :: Board, gTurn :: Color , gLog :: [String]}
 
@@ -61,6 +61,9 @@ main :: IO ()
 main = do
  let game = Game {gBoard = initializeBoard, gTurn = White, gLog = []}
  putStrLn $ show 
+                 $ move (E,1) (E,2)
+                 $ move (D,5) (C,3)
+                 $ move (G,1) (F,3)
                  $ move (D,8) (D,6)
                  $ move (G,2) (H,3)
                  $ move (C,8) (H,3)
@@ -113,6 +116,9 @@ initializeBoard = M.fromList [
 takePiece :: Board -> Pos_q -> Maybe Piece
 takePiece b p = M.lookup p b
 
+findPiece :: Board -> Piece -> Maybe Pos_q
+findPiece b piece = fmap fst $ find ((==piece) . snd) $ M.toList b
+
 move :: Position -> Position -> Game -> Game
 move (c0, r0) (c1, r1) g = move' (cnum c0, r0) (cnum c1, r1) g
   where cnum c = case c of A -> 1
@@ -129,8 +135,8 @@ move' from to g = case (takePiece b from) of
   Nothing -> Game { gBoard = b, gTurn = t, gLog = (("invalid location "++show from):l)}
   Just piece  ->
     let (P color _) = piece in
-      if t==color && validateMove b piece from to
-        then Game { gBoard = M.insert to piece (M.delete from b), 
+      if t==color && validateMove b piece from to && isKingSafe b color from to
+        then Game { gBoard = makeMove b piece from to, 
                     gTurn = if color == Black then White else Black, 
                     gLog = genLog piece}
         else Game { gBoard = b, gTurn = t, gLog = ("invalid move":l)}
@@ -141,6 +147,9 @@ move' from to g = case (takePiece b from) of
     l = gLog g
     (c1, r1) = to
     (c0, r0) = from
+
+makeMove :: Board -> Piece -> Pos_q -> Pos_q -> Board
+makeMove b piece from to = M.insert to piece (M.delete from b)
 
 validateMove :: Board -> Piece -> Pos_q -> Pos_q -> Bool
 validateMove b (P _ Pawn)   from to = from/=to && isInsideBoard to && isPawnMove b from to
@@ -204,5 +213,20 @@ isFree b from to = case takePiece b from of
                             else foldr (\i r -> r && isMovable b (c0,r0+i) color) True [0,dirr..difc] 
     diagonalCheck color = foldr (\(ic, ir) r -> r && isMovable b (c0+ic, r0+ir) color) True (zip [0,dirc..difc] [0,dirr..difr])
 
-updateAoI :: Board -> Areas
-updateAoI = undefined
+isKingSafe :: Board -> Color -> Pos_q -> Pos_q -> Bool
+isKingSafe b turn from to = case (takePiece b from) of
+  Nothing -> False -- non-existent case. validateMove ensures this.
+  Just movingPiece -> iterDiagonal Queen myKing && iterStraight Queen myKing && iterLShaped myKing
+    where nb = makeMove b movingPiece from to --possible next state
+          myKing = findPiece nb (P turn King)
+          opponent = if turn == White then Black else White
+          iterDiagonal t (Just (c, r)) = True
+          iterStraight t (Just (c, r)) = and $ map ((/=(Just (P opponent t))).(takePiece nb)) $ 
+            [((takeWhile (\cx -> isMovable nb (cx,r)) [c..8]), r)] ++
+            [((takeWhile (\cx -> isMovable nb (cx,r)) [c,-1..0]), r)] ++
+            [(c, (takeWhile (\rx -> isMovable nb (c,rx)) [r..8]))] ++
+            [(c, (takeWhile (\rx -> isMovable nb (c,rx)) [r,-1..0]))]
+          iterLShaped  (Just (c, r)) = and $ map ((/=(Just (P opponent Knight))).(takePiece nb)) [(c-2,r-1), (c-2,r+1), (c+2,r-1), (c-2, r+1), (c-1,r-2), (c-1,r+2), (c+1,r-2), (c+1,r+2)]
+          isMovable b pos = case takePiece b pos of
+            Nothing   -> True
+            otherwise -> False
