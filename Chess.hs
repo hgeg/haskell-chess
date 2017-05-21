@@ -216,9 +216,12 @@ isRook b from to = mkLog (
 
 isRook' :: Board -> Pos_q -> Pos_q -> Bool
 isRook' b from to = case takePiece b from of 
-  Just (P c King) -> nextToRook b from to
+  Just (P c King) -> (nextToRook b from to)    ||
+                     (c==Black && from==(4,7)) ||
+                     (c==White && from==(4,0)) ||
   otherwise -> False
-  where nextToRook b f t = False
+  where nextToRook b f t = let next = in
+    
 
 isFree :: Board -> Pos_q -> Pos_q -> Log
 isFree b from to = mkLog (
